@@ -1,0 +1,45 @@
+name: Recognition bridge
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: windows-latest
+          java: 21
+          arch: x64
+          runner: windows-latest
+        - os: windows-latest
+          java: 21
+          arch: arm64
+          runner: windows-11-arm
+        - os: macos-latest
+          java: 21
+          arch: x64
+          runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '${{ matrix.java }}'
+        cache: gradle
+    - name: Test HTTP lifecycle and request limits
+      run: python -m unittest discover -s bridge/tests -v
+    - name: Build engine and test MIDI export contract
+      run: bash ./gradlew --no-daemon :app:installDist :app:test --tests 
+        com.notelite.omr.MobileExportCliTest --tests 
+        com.notelite.omr.score.MidiExporterTest
+    - name: Recognize a real score through HTTP and validate downloads
+      run: python bridge/smoke_real_engine.py
